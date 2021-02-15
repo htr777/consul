@@ -26,6 +26,20 @@ const (
 			}
 		]
 	}`
+	expectedPrometheusBackendCluster = `{
+		"name": "prometheus_backend",
+		"connect_timeout": "5s",
+		"type": "STATIC",
+		"http_protocol_options": {},
+		"hosts": [
+			{
+				"socket_address": {
+					"address": "127.0.0.1",
+					"port_value": 20100
+				}
+			}
+		]
+	}`
 	expectedPromListener = `{
 		"name": "envoy_prometheus_metrics_listener",
 		"address": {
@@ -57,6 +71,63 @@ const (
 												},
 												"route": {
 													"cluster": "self_admin",
+													"prefix_rewrite": "/stats/prometheus"
+												}
+											},
+											{
+												"match": {
+													"prefix": "/"
+												},
+												"direct_response": {
+													"status": 404
+												}
+											}
+										]
+									}
+								]
+							},
+							"http_filters": [
+								{
+									"name": "envoy.router"
+								}
+							]
+						}
+					}
+				]
+			}
+		]
+	}`
+	expectedPromListenerWithPrometheusBackendCluster = `{
+		"name": "envoy_prometheus_metrics_listener",
+		"address": {
+			"socket_address": {
+				"address": "0.0.0.0",
+				"port_value": 9000
+			}
+		},
+		"filter_chains": [
+			{
+				"filters": [
+					{
+						"name": "envoy.http_connection_manager",
+						"config": {
+							"stat_prefix": "envoy_prometheus_metrics",
+							"codec_type": "HTTP1",
+							"route_config": {
+								"name": "self_admin_route",
+								"virtual_hosts": [
+									{
+										"name": "self_admin",
+										"domains": [
+											"*"
+										],
+										"routes": [
+											{
+												"match": {
+													"path": "/metrics"
+												},
+												"route": {
+													"cluster": "prometheus_backend",
 													"prefix_rewrite": "/stats/prometheus"
 												}
 											},
@@ -436,8 +507,9 @@ func TestBootstrapConfig_ConfigureArgs(t *testing.T) {
 				PrometheusBindAddr: "0.0.0.0:9000",
 			},
 			baseArgs: BootstrapTplArgs{
-				AdminBindAddress: "127.0.0.1",
-				AdminBindPort:    "19000",
+				AdminBindAddress:     "127.0.0.1",
+				AdminBindPort:        "19000",
+				PrometheusScrapePath: "/metrics",
 			},
 			wantArgs: BootstrapTplArgs{
 				AdminBindAddress: "127.0.0.1",
@@ -445,8 +517,33 @@ func TestBootstrapConfig_ConfigureArgs(t *testing.T) {
 				// Should add a static cluster for the self-proxy to admin
 				StaticClustersJSON: expectedSelfAdminCluster,
 				// Should add a static http listener too
-				StaticListenersJSON: expectedPromListener,
-				StatsConfigJSON:     defaultStatsConfigJSON,
+				StaticListenersJSON:  expectedPromListener,
+				StatsConfigJSON:      defaultStatsConfigJSON,
+				PrometheusScrapePath: "/metrics",
+			},
+			wantErr: false,
+		},
+		{
+			name: "prometheus-bind-addr-with-prometheus-backend",
+			input: BootstrapConfig{
+				PrometheusBindAddr: "0.0.0.0:9000",
+			},
+			baseArgs: BootstrapTplArgs{
+				AdminBindAddress:      "127.0.0.1",
+				AdminBindPort:         "19000",
+				PrometheusBackendPort: "20100",
+				PrometheusScrapePath:  "/metrics",
+			},
+			wantArgs: BootstrapTplArgs{
+				AdminBindAddress: "127.0.0.1",
+				AdminBindPort:    "19000",
+				// Should use the "prometheus_backend" cluster instead, which
+				// uses the PrometheusBackendPort rather than Envoy admin port
+				StaticClustersJSON:    expectedPrometheusBackendCluster,
+				StaticListenersJSON:   expectedPromListenerWithPrometheusBackendCluster,
+				StatsConfigJSON:       defaultStatsConfigJSON,
+				PrometheusBackendPort: "20100",
+				PrometheusScrapePath:  "/metrics",
 			},
 			wantErr: false,
 		},
@@ -458,8 +555,9 @@ func TestBootstrapConfig_ConfigureArgs(t *testing.T) {
 				StaticListenersJSON: `{"baz":"qux"}`,
 			},
 			baseArgs: BootstrapTplArgs{
-				AdminBindAddress: "127.0.0.1",
-				AdminBindPort:    "19000",
+				AdminBindAddress:     "127.0.0.1",
+				AdminBindPort:        "19000",
+				PrometheusScrapePath: "/metrics",
 			},
 			wantArgs: BootstrapTplArgs{
 				AdminBindAddress: "127.0.0.1",
@@ -467,8 +565,9 @@ func TestBootstrapConfig_ConfigureArgs(t *testing.T) {
 				// Should add a static cluster for the self-proxy to admin
 				StaticClustersJSON: `{"foo":"bar"},` + expectedSelfAdminCluster,
 				// Should add a static http listener too
-				StaticListenersJSON: `{"baz":"qux"},` + expectedPromListener,
-				StatsConfigJSON:     defaultStatsConfigJSON,
+				StaticListenersJSON:  `{"baz":"qux"},` + expectedPromListener,
+				StatsConfigJSON:      defaultStatsConfigJSON,
+				PrometheusScrapePath: "/metrics",
 			},
 			wantErr: false,
 		},
@@ -614,8 +713,9 @@ func TestBootstrapConfig_ConfigureArgs(t *testing.T) {
 				StatsBindAddr:      "0.0.0.0:9000",
 			},
 			baseArgs: BootstrapTplArgs{
-				AdminBindAddress: "127.0.0.1",
-				AdminBindPort:    "19000",
+				AdminBindAddress:     "127.0.0.1",
+				AdminBindPort:        "19000",
+				PrometheusScrapePath: "/metrics",
 			},
 			wantArgs: BootstrapTplArgs{
 				AdminBindAddress: "127.0.0.1",
@@ -627,7 +727,8 @@ func TestBootstrapConfig_ConfigureArgs(t *testing.T) {
 					[]string{expectedPromListener, expectedStatsListener, expectedReadyListener},
 					", ",
 				),
-				StatsConfigJSON: defaultStatsConfigJSON,
+				StatsConfigJSON:      defaultStatsConfigJSON,
+				PrometheusScrapePath: "/metrics",
 			},
 			wantErr: false,
 		},
@@ -639,8 +740,9 @@ func TestBootstrapConfig_ConfigureArgs(t *testing.T) {
 				StatsBindAddr:      "0.0.0.0:9000",
 			},
 			baseArgs: BootstrapTplArgs{
-				AdminBindAddress: "127.0.0.1",
-				AdminBindPort:    "19000",
+				AdminBindAddress:     "127.0.0.1",
+				AdminBindPort:        "19000",
+				PrometheusScrapePath: "/metrics",
 			},
 			omitDeprecatedTags: true,
 			wantArgs: BootstrapTplArgs{
@@ -652,7 +754,8 @@ func TestBootstrapConfig_ConfigureArgs(t *testing.T) {
 					", ",
 				),
 				// Should not have default stats config JSON when deprecated tags are omitted
-				StatsConfigJSON: updatedStatsConfigJSON,
+				StatsConfigJSON:      updatedStatsConfigJSON,
+				PrometheusScrapePath: "/metrics",
 			},
 			wantErr: false,
 		},
