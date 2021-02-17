@@ -2,6 +2,7 @@ import EmberRouter from '@ember/routing/router';
 import { runInDebug } from '@ember/debug';
 import { env } from 'consul-ui/env';
 import walk, { dump } from 'consul-ui/utils/routing/walk';
+import { addDocfyRoutes } from '@docfy/ember';
 
 export const routes = {
   // Our parent datacenter resource sets the namespace
@@ -184,7 +185,10 @@ export default class Router extends EmberRouter {
   rootURL = env('rootURL');
 }
 
-Router.map(walk(routes));
+Router.map(function() {
+  addDocfyRoutes(this);
+  walk(routes).apply(this, arguments);
+});
 
 // To print the Ember route DSL use `Routes()` in Web Inspectors console
 // or `javascript:Routes()` in the location bar of your browser

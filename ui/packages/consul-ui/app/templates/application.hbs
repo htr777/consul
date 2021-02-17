@@ -17,22 +17,47 @@ as |source|>
   {{/if}}
 {{/each-in}}
 </DataSource>
+{{#if (string-starts-with router.currentRouteName 'docs.')}}
+<App class="hashicorp-consul docs">
+  <:main-nav>
+<DocfyOutput as |node|>
+  <ul>
+    {{#each node.children as |child|}}
+          {{#each child.children as |child|}}
+                {{#each child.pages as |child|}}
+                  <li>
+                    <DocfyLink @to={{child.url}}>
+                      {{child.title}}
+                    </DocfyLink>
+                  </li>
+                {{/each}}
+          {{/each}}
+    {{/each}}
+  </ul>
+</DocfyOutput>
 
-{{#if (not-eq router.currentRouteName 'application')}}
-  <HashicorpConsul
-    id="wrapper"
-    @permissions={{permissions}}
-    @dcs={{dcs}}
-    @dc={{or dc dcs.firstObject}}
-    @nspaces={{nspaces}}
-    @nspace={{or nspace nspaces.firstObject}}
-    @onchange={{action "reauthorize"}}
-  >
-  <Outlet
-  @name="application"
-  as |o|>
+  </:main-nav>
+  <:main>
     {{outlet}}
-  </Outlet>
-    <Consul::Loader class="view-loader" />
-  </HashicorpConsul>
+  </:main>
+</App>
+{{else}}
+  {{#if (not-eq router.currentRouteName 'application')}}
+    <HashicorpConsul
+      id="wrapper"
+      @permissions={{permissions}}
+      @dcs={{dcs}}
+      @dc={{or dc dcs.firstObject}}
+      @nspaces={{nspaces}}
+      @nspace={{or nspace nspaces.firstObject}}
+      @onchange={{action "reauthorize"}}
+    >
+    <Outlet
+    @name="application"
+    as |o|>
+      {{outlet}}
+    </Outlet>
+      <Consul::Loader class="view-loader" />
+    </HashicorpConsul>
+  {{/if}}
 {{/if}}
